@@ -62,12 +62,12 @@
     const levels = [
       { score: 25000, name: "PAST" },
       { score: 20000, name: "GOD" },
-      { score: 17500, name: "Master" },
-      { score: 15000, name: "Pro" },
-      { score: 12500, name: "Expert" },
-      { score: 10000, name: "Skilled" },
+      { score: 15000, name: "Master" },
+      { score: 17500, name: "Pro" },
+      { score: 15000, name: "Expert" },
+      { score: 12500, name: "Skilled" },
       { score: 7500, name: "Ameteur" },
-      { score: 5000, name: "Novice" },
+      { score: 2500, name: "Novice" },
       { score: 0, name: "Noob" },
     ];
 
@@ -204,6 +204,9 @@
       ctx.font = "18px pixel-font";
       ctx.fillText("Click to Play", 140, 260);
     }
+    
+    let difficultyTimer = 0;
+    const difficultyInterval = 0.5; // ~50 frames at 60fps = 0.83s
 
     function update(currentTime) {
       const deltaTime = (currentTime - lastTime) / 1000;
@@ -221,16 +224,13 @@
       } else if (gameState === "controls") {
         drawControlsScreen();
       } else if (gameState === "playing") {
+        // Movement
         const moveSpeed = 200;
-        const maxSpread = canvas.height - ENERGY_BAR_HEIGHT - 20;
-        const spreadFactor = Math.min(1, gameTimer / 30);
-        const verticalSpread = 60 + spreadFactor * (maxSpread - 60);
-
         if (keys.ArrowUp) cubie.y -= moveSpeed * deltaTime;
         if (keys.ArrowDown) cubie.y += moveSpeed * deltaTime;
-
         cubie.y = Math.max(ENERGY_BAR_HEIGHT, Math.min(canvas.height - cubie.h, cubie.y));
 
+        // Animation frame counters
         cubieFrameCounter += deltaTime;
         if (cubieFrameCounter >= 0.5) {
           cubieFrame = (cubieFrame + 1) % cubieSprites.length;
@@ -240,7 +240,7 @@
         if (cubieChargeTimer > 0) cubieChargeTimer--;
 
         energyFrameCounter += deltaTime;
-        if (energyFrameCounter >= 1/3) {
+        if (energyFrameCounter >= 1 / 3) {
           energyFrame = (energyFrame + 1) % energyImgs.length;
           energyFrameCounter = 0;
         }
@@ -250,11 +250,16 @@
         drawEnergyBar();
 
         gameTimer += deltaTime;
-        if (Math.floor(gameTimer * 60) % 50 === 0) {
-          speed += 5;
-          drainRate += 0.08;
+        difficultyTimer += deltaTime;
+
+        // Increase difficulty every 0.83s
+        if (difficultyTimer >= difficultyInterval) {
+          speed += 5.5;
+          drainRate = (10 * speed) / 380;
+          difficultyTimer -= difficultyInterval;
         }
 
+        // Energy logic
         if (rechargeBuffer > 0) {
           rechargeBuffer--;
         } else {
@@ -265,28 +270,31 @@
 
         energy.x -= speed * deltaTime;
 
-        const secondsElapsed = gameTimer;
+        // Score increase logic
         const basePoints = 50;
         const scalar = 5;
+        const secondsElapsed = gameTimer;
         let points = Math.floor(basePoints + scalar * secondsElapsed);
         if (energyLevel >= 100) points = Math.floor(points * 1.5);
 
-        if (
+        const hit = (
           energy.x < cubie.x + cubie.w &&
           energy.y + 20 > cubie.y &&
           energy.y < cubie.y + cubie.h
-        ) {
+        );
+
+        if (hit) {
           score += points;
           energyLevel = Math.min(110, energyLevel + 10);
           rechargeBuffer = 20;
           cubieChargeTimer = 35;
           energy.x = canvas.width;
-          energy.y = ENERGY_BAR_HEIGHT + Math.random() * verticalSpread;
+          energy.y = ENERGY_BAR_HEIGHT + Math.random() * (canvas.height - ENERGY_BAR_HEIGHT - 20);
         }
 
         if (energy.x < -20) {
           energy.x = canvas.width;
-          energy.y = ENERGY_BAR_HEIGHT + Math.random() * verticalSpread;
+          energy.y = ENERGY_BAR_HEIGHT + Math.random() * (canvas.height - ENERGY_BAR_HEIGHT - 20);
         }
       } else if (gameState === "gameover") {
         drawGameOver();
