@@ -101,6 +101,12 @@
       if (e.key === "ArrowUp" || e.key === "ArrowDown") keys[e.key] = false;
     });
 
+    window.addEventListener("keydown", function (e) {
+      if (["ArrowUp", "ArrowDown", " "].includes(e.key)) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+
     function getLevelName(score) {
       for (const level of levels) {
         if (score >= level.score) return level.name;
