@@ -1,53 +1,298 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Snake Game</title>
+  <meta charset="utf-8" />
+  <title>Cubie Charge</title>
   <style>
-    canvas { background: #000; display: block; margin: 0 auto; }
+    body {
+      margin: 0;
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    canvas {
+      background: #0e0e0e;
+      border: 0px solid rgb(0, 0, 0);
+      image-rendering: pixelated;
+      display: block;
+    }
+    @font-face {
+      font-family: 'pixel-font';
+      src: url('fonts/super.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
   </style>
 </head>
 <body>
-  <canvas id="game" width="400" height="400"></canvas>
+  <canvas id="game" width="400" height="300"></canvas>
   <script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
-    const grid = 20;
-    let snake = [{ x: 160, y: 160 }];
-    let dx = grid, dy = 0;
-    let apple = { x: 320, y: 320 };
+    ctx.imageSmoothingEnabled = false;
 
-    function gameLoop() {
-      requestAnimationFrame(gameLoop);
-      if (++count < 5) return;
-      count = 0;
-
-      const head = { x: snake[0].x + dx, y: snake[0].y + dy };
-      snake.unshift(head);
-
-      if (head.x === apple.x && head.y === apple.y) {
-        apple.x = Math.floor(Math.random() * 20) * grid;
-        apple.y = Math.floor(Math.random() * 20) * grid;
-      } else {
-        snake.pop();
-      }
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "lime";
-      snake.forEach(s => ctx.fillRect(s.x, s.y, grid-2, grid-2));
-      ctx.fillStyle = "red";
-      ctx.fillRect(apple.x, apple.y, grid-2, grid-2);
+    const cubieSprites = [];
+    for (let i = 0; i < 2; i++) {
+      const img = new Image();
+      img.src = `sprites/cubie/cubie_${i}.png`;
+      cubieSprites.push(img);
     }
 
-    let count = 0;
-    document.addEventListener("keydown", e => {
-      if (e.key === "ArrowLeft" && dx === 0) { dx = -grid; dy = 0; }
-      if (e.key === "ArrowUp" && dy === 0) { dx = 0; dy = -grid; }
-      if (e.key === "ArrowRight" && dx === 0) { dx = grid; dy = 0; }
-      if (e.key === "ArrowDown" && dy === 0) { dx = 0; dy = grid; }
+    const cubieChargeImg = new Image();
+    cubieChargeImg.src = "sprites/cubie/cubie_charge.png";
+
+    const energyImgs = [];
+    let energyFrame = 0;
+    let energyFrameCounter = 0;
+    for (let i = 0; i <= 2; i++) {
+      const img = new Image();
+      img.src = `sprites/energy/energy_${i}.png`;
+      energyImgs[i] = img;
+    }
+
+    const energyBarSprites = [];
+    for (let i = 0; i <= 10; i++) {
+      const img = new Image();
+      img.src = `sprites/energy_bar/energy_bar_${i}.png`;
+      energyBarSprites[i] = img;
+    }
+
+    const backgroundStart = new Image();
+    backgroundStart.src = "sprites/backgrounds/start.png";
+
+    const backgroundPlaying = new Image();
+    backgroundPlaying.src = "sprites/backgrounds/playing.png";
+
+    const backgroundGameOver = new Image();
+    backgroundGameOver.src = "sprites/backgrounds/gameover.png";
+
+    const ENERGY_BAR_HEIGHT = 40;
+    let gameState = "start";
+    let cubie, energy, score, energyLevel;
+    let speed = 1.8;
+    let drainRate = 0.03;
+    let gameTimer = 0;
+    let rechargeBuffer = 0;
+    let cubieFrame = 0;
+    let cubieFrameCounter = 0;
+    let cubieChargeTimer = 0;
+
+    const keys = { ArrowUp: false, ArrowDown: false };
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") keys[e.key] = true;
+    });
+    document.addEventListener("keyup", (e) => {
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") keys[e.key] = false;
     });
 
-    requestAnimationFrame(gameLoop);
+    function initGame() {
+      cubie = { x: 20, y: ENERGY_BAR_HEIGHT + 100, w: 50, h: 50 };
+      energy = { x: 400, y: ENERGY_BAR_HEIGHT + Math.random() * (300 - ENERGY_BAR_HEIGHT - 20), r: 15 };
+      score = 0;
+      energyLevel = 110;
+      speed = 1.8;
+      drainRate = 0.03;
+      gameTimer = 0;
+      rechargeBuffer = 0;
+      cubieChargeTimer = 0;
+      cubieFrame = 0;
+      cubieFrameCounter = 0;
+      gameState = "playing";
+    }
+
+    function drawCubie() {
+      let img;
+      if (cubieChargeTimer > 0) {
+        img = cubieChargeImg;
+      } else {
+        img = cubieSprites[cubieFrame];
+      }
+
+      if (img && img.complete && img.naturalWidth) {
+        ctx.drawImage(img, cubie.x, cubie.y, cubie.w, cubie.h);
+      } else {
+        ctx.fillStyle = "#00ffcc";
+        ctx.fillRect(cubie.x, cubie.y, cubie.w, cubie.h);
+      }
+    }
+
+    function drawEnergy() {
+      const img = energyImgs[energyFrame];
+      
+      ctx.save(); // Save current drawing state
+      
+      // Set glow effect
+      ctx.shadowColor = "rgba(255, 255, 0, 0.5)";  // yellow glow
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      
+      if (img && img.complete && img.naturalWidth) {
+        ctx.drawImage(img, energy.x, energy.y, 44, 27);
+      } else {
+        ctx.fillStyle = "yellow";
+        ctx.beginPath();
+        ctx.arc(energy.x, energy.y, 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      ctx.restore(); // Restore so glow doesn’t affect other drawings
+
+      // Update animation frame counter
+      energyFrameCounter++;
+      if (energyFrameCounter >= 25) {
+        energyFrame = (energyFrame + 1) % energyImgs.length;
+        energyFrameCounter = 0;
+      }
+    }
+
+    function drawEnergyBar() {
+      // ctx.fillStyle = "#000000";
+      // ctx.fillRect(0, 0, canvas.width, ENERGY_BAR_HEIGHT);
+
+      const index = Math.max(0, Math.min(10, Math.floor(energyLevel / 10)));
+      const img = energyBarSprites[index];
+
+      if (img.complete && img.naturalWidth > 0) {
+        ctx.drawImage(img, 20, 8, 240, 24);
+      } else {
+        ctx.fillStyle =
+          energyLevel > 50 ? "#00ff66" : energyLevel > 20 ? "#ffcc00" : "#ff3333";
+        ctx.fillRect(20, 8, 2.4 * energyLevel, 24);
+      }
+
+      ctx.fillStyle = "white";
+      ctx.font = "16px pixel-font";
+      ctx.fillText("Score: " + score, 280, 26);
+    }
+
+    function drawStartScreen() {
+      ctx.fillStyle = "white";
+      ctx.font = "36px pixel-font";
+      ctx.fillText("Cubie Charge", 100, 150);
+      ctx.fillStyle = "#ffc413";
+      ctx.font = "24px pixel-font";
+      ctx.fillText("Click to Start", 126, 180);
+    }
+
+    function drawGameOver() {
+      ctx.fillStyle = "#ff1e1e";
+      ctx.font = "30px pixel-font";
+      ctx.fillText("Power Depleted", 110, 150);
+      ctx.fillStyle = "white";
+      ctx.font = "24px pixel-font";
+      ctx.fillText("Score: " + score, 160, 180);
+      ctx.fillText("Click to Play Again", 115, 210);
+    }
+
+    function update() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw background based on game state
+      let bg;
+      if (gameState === "start") {
+        bg = backgroundStart;
+      } else if (gameState === "playing") {
+        bg = backgroundPlaying;
+      } else if (gameState === "gameover") {
+        bg = backgroundGameOver;
+      }
+
+      if (bg && bg.complete && bg.naturalWidth) {
+        ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
+      } else {
+        // fallback background color if image not loaded
+        ctx.fillStyle = "#0e0e0e";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      if (gameState === "start") {
+        drawStartScreen();
+      }
+
+      if (gameState === "playing") {
+        const moveSpeed = 1.75;
+        const maxSpread = canvas.height - ENERGY_BAR_HEIGHT - 20;
+        const spreadFactor = Math.min(1, gameTimer / (60 * 30));
+        const verticalSpread = 60 + spreadFactor * (maxSpread - 60);
+
+        if (keys.ArrowUp) cubie.y -= moveSpeed;
+        if (keys.ArrowDown) cubie.y += moveSpeed;
+
+        cubie.y = Math.max(ENERGY_BAR_HEIGHT, Math.min(canvas.height - cubie.h, cubie.y));
+
+        // Animate cubie frame
+        cubieFrameCounter++;
+        if (cubieFrameCounter >= 20) {
+          cubieFrame = (cubieFrame + 1) % cubieSprites.length;
+          cubieFrameCounter = 0;
+        }
+
+        if (cubieChargeTimer > 0) cubieChargeTimer--;
+
+        drawCubie();
+        drawEnergy();
+        drawEnergyBar();
+
+        gameTimer++;
+        if (gameTimer % 300 === 0) {
+          speed += 0.25;
+          drainRate += 0.01;
+        }
+
+        if (rechargeBuffer > 0) {
+          rechargeBuffer--;
+        } else {
+          energyLevel -= drainRate;
+        }
+
+        if (energyLevel <= 0) {
+          gameState = "gameover";
+        }
+
+        energy.x -= speed;
+
+        const secondsElapsed = gameTimer / 60;
+        const basePoints = 50;
+        const scalar = 5;
+
+        if (
+          energy.x < cubie.x + cubie.w &&
+          energy.y + 20 > cubie.y &&
+          energy.y < cubie.y + cubie.h
+        ) {
+          const points = Math.floor(basePoints + scalar * secondsElapsed);
+          score += points;
+          energyLevel = Math.min(110, energyLevel + 10);
+          rechargeBuffer = 20;
+          cubieChargeTimer = 35; // Trigger energized sprite
+          energy.x = canvas.width;
+          energy.y = ENERGY_BAR_HEIGHT + Math.random() * verticalSpread;
+        }
+
+        if (energy.x < -20) {
+          energy.x = canvas.width;
+          energy.y = ENERGY_BAR_HEIGHT + Math.random() * verticalSpread;
+        }
+      }
+
+      if (gameState === "gameover") {
+        drawGameOver();
+      }
+
+      requestAnimationFrame(update);
+    }
+
+    canvas.addEventListener("click", () => {
+      if (gameState === "start" || gameState === "gameover") {
+        initGame();
+      }
+    });
+
+    update();
   </script>
 </body>
 </html>
