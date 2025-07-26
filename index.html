@@ -33,31 +33,26 @@
     const ctx = canvas.getContext("2d");
     ctx.imageSmoothingEnabled = false;
 
-    const cubieSprites = [];
-    for (let i = 0; i < 2; i++) {
+    const cubieSprites = [0, 1].map(i => {
       const img = new Image();
       img.src = `sprites/cubie/cubie_${i}.png`;
-      cubieSprites.push(img);
-    }
+      return img;
+    });
 
     const cubieChargeImg = new Image();
     cubieChargeImg.src = "sprites/cubie/cubie_charge.png";
 
-    const energyImgs = [];
-    let energyFrame = 0;
-    let energyFrameCounter = 0;
-    for (let i = 0; i <= 2; i++) {
+    const energyImgs = [0, 1, 2].map(i => {
       const img = new Image();
       img.src = `sprites/energy/energy_${i}.png`;
-      energyImgs[i] = img;
-    }
+      return img;
+    });
 
-    const energyBarSprites = [];
-    for (let i = 0; i <= 10; i++) {
+    const energyBarSprites = Array.from({ length: 11 }, (_, i) => {
       const img = new Image();
       img.src = `sprites/energy_bar/energy_bar_${i}.png`;
-      energyBarSprites[i] = img;
-    }
+      return img;
+    });
 
     const backgroundStart = new Image();
     backgroundStart.src = "sprites/backgrounds/start.png";
@@ -67,6 +62,21 @@
 
     const backgroundGameOver = new Image();
     backgroundGameOver.src = "sprites/backgrounds/gameover.png";
+
+    const controlsImg = new Image();
+    controlsImg.src = "sprites/ui/controls.png";
+
+    const levels = [
+      { score: 25000, name: "PAST" },
+      { score: 20000, name: "GOD" },
+      { score: 17500, name: "Master" },
+      { score: 15000, name: "Pro" },
+      { score: 12500, name: "Expert" },
+      { score: 10000, name: "Skilled" },
+      { score: 7500, name: "Ameteur" },
+      { score: 5000, name: "Novice" },
+      { score: 0, name: "Noob" },
+    ];
 
     const ENERGY_BAR_HEIGHT = 40;
     let gameState = "start";
@@ -78,18 +88,28 @@
     let cubieFrame = 0;
     let cubieFrameCounter = 0;
     let cubieChargeTimer = 0;
+    let energyFrame = 0;
+    let energyFrameCounter = 0;
+    let hasShownControls = false;
+    let frozenFrame = null;
 
     const keys = { ArrowUp: false, ArrowDown: false };
-
-    document.addEventListener("keydown", (e) => {
+    document.addEventListener("keydown", e => {
       if (e.key === "ArrowUp" || e.key === "ArrowDown") keys[e.key] = true;
     });
-    document.addEventListener("keyup", (e) => {
+    document.addEventListener("keyup", e => {
       if (e.key === "ArrowUp" || e.key === "ArrowDown") keys[e.key] = false;
     });
 
+    function getLevelName(score) {
+      for (const level of levels) {
+        if (score >= level.score) return level.name;
+      }
+      return "Unknown";
+    }
+
     function initGame() {
-      cubie = { x: 20, y: ENERGY_BAR_HEIGHT + 100, w: 50, h: 50 };
+      cubie = { x: 20, y: ENERGY_BAR_HEIGHT + 100, w: 74, h: 50 };
       energy = { x: 400, y: ENERGY_BAR_HEIGHT + Math.random() * (300 - ENERGY_BAR_HEIGHT - 20), r: 15 };
       score = 0;
       energyLevel = 110;
@@ -100,17 +120,20 @@
       cubieChargeTimer = 0;
       cubieFrame = 0;
       cubieFrameCounter = 0;
-      gameState = "playing";
+      energyFrame = 0;
+      energyFrameCounter = 0;
+
+      if (!hasShownControls) {
+        gameState = "controls";
+        // Capture current background for frozen frame
+        frozenFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      } else {
+        gameState = "playing";
+      }
     }
 
     function drawCubie() {
-      let img;
-      if (cubieChargeTimer > 0) {
-        img = cubieChargeImg;
-      } else {
-        img = cubieSprites[cubieFrame];
-      }
-
+      const img = cubieChargeTimer > 0 ? cubieChargeImg : cubieSprites[cubieFrame];
       if (img && img.complete && img.naturalWidth) {
         ctx.drawImage(img, cubie.x, cubie.y, cubie.w, cubie.h);
       } else {
@@ -121,15 +144,12 @@
 
     function drawEnergy() {
       const img = energyImgs[energyFrame];
-      
-      ctx.save(); // Save current drawing state
-      
-      // Set glow effect
-      ctx.shadowColor = "rgba(255, 255, 0, 0.5)";  // yellow glow
+      ctx.save();
+      ctx.shadowColor = "rgba(255, 255, 0, 0.5)";
       ctx.shadowBlur = 10;
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
-      
+
       if (img && img.complete && img.naturalWidth) {
         ctx.drawImage(img, energy.x, energy.y, 44, 27);
       } else {
@@ -138,10 +158,9 @@
         ctx.arc(energy.x, energy.y, 10, 0, Math.PI * 2);
         ctx.fill();
       }
-      
-      ctx.restore(); // Restore so glow doesn’t affect other drawings
 
-      // Update animation frame counter
+      ctx.restore();
+
       energyFrameCounter++;
       if (energyFrameCounter >= 25) {
         energyFrame = (energyFrame + 1) % energyImgs.length;
@@ -150,9 +169,6 @@
     }
 
     function drawEnergyBar() {
-      // ctx.fillStyle = "#000000";
-      // ctx.fillRect(0, 0, canvas.width, ENERGY_BAR_HEIGHT);
-
       const index = Math.max(0, Math.min(10, Math.floor(energyLevel / 10)));
       const img = energyBarSprites[index];
 
@@ -181,39 +197,63 @@
     function drawGameOver() {
       ctx.fillStyle = "#ff1e1e";
       ctx.font = "30px pixel-font";
-      ctx.fillText("Power Depleted", 110, 150);
+      ctx.fillText("Power Depleted", 110, 130);
+
       ctx.fillStyle = "white";
       ctx.font = "24px pixel-font";
-      ctx.fillText("Score: " + score, 160, 180);
-      ctx.fillText("Click to Play Again", 115, 210);
+      ctx.fillText("Score: " + score, 150, 165);
+
+      const level = getLevelName(score);
+      ctx.fillStyle = "#ffc413";
+      ctx.fillText("Rank: " + level, 150, 195);
+
+      ctx.fillStyle = "white";
+      ctx.fillText("Click to Play Again", 110, 230);
+    }
+
+    function drawControlsScreen() {
+      if (frozenFrame) ctx.putImageData(frozenFrame, 0, 0);
+      else {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // Overlay with semi-transparent black
+      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (controlsImg.complete && controlsImg.naturalWidth) {
+        ctx.drawImage(controlsImg, 60, 50, 280, 180);
+      } else {
+        ctx.fillStyle = "white";
+        ctx.font = "20px pixel-font";
+        ctx.fillText("Controls: Use ↑ and ↓ to move", 60, 160);
+      }
+
+      ctx.fillStyle = "#ffc413";
+      ctx.font = "18px pixel-font";
+      ctx.fillText("Click to Play", 140, 260);
     }
 
     function update() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw background based on game state
-      let bg;
-      if (gameState === "start") {
-        bg = backgroundStart;
-      } else if (gameState === "playing") {
-        bg = backgroundPlaying;
-      } else if (gameState === "gameover") {
-        bg = backgroundGameOver;
-      }
+      let bg = backgroundPlaying;
+      if (gameState === "start") bg = backgroundStart;
+      else if (gameState === "gameover") bg = backgroundGameOver;
 
       if (bg && bg.complete && bg.naturalWidth) {
         ctx.drawImage(bg, 0, 0, canvas.width, canvas.height);
       } else {
-        // fallback background color if image not loaded
         ctx.fillStyle = "#0e0e0e";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
       if (gameState === "start") {
         drawStartScreen();
-      }
-
-      if (gameState === "playing") {
+      } else if (gameState === "controls") {
+        drawControlsScreen();
+      } else if (gameState === "playing") {
         const moveSpeed = 1.75;
         const maxSpread = canvas.height - ENERGY_BAR_HEIGHT - 20;
         const spreadFactor = Math.min(1, gameTimer / (60 * 30));
@@ -224,7 +264,6 @@
 
         cubie.y = Math.max(ENERGY_BAR_HEIGHT, Math.min(canvas.height - cubie.h, cubie.y));
 
-        // Animate cubie frame
         cubieFrameCounter++;
         if (cubieFrameCounter >= 20) {
           cubieFrame = (cubieFrame + 1) % cubieSprites.length;
@@ -249,9 +288,7 @@
           energyLevel -= drainRate;
         }
 
-        if (energyLevel <= 0) {
-          gameState = "gameover";
-        }
+        if (energyLevel <= 0) gameState = "gameover";
 
         energy.x -= speed;
 
@@ -268,7 +305,7 @@
           score += points;
           energyLevel = Math.min(110, energyLevel + 10);
           rechargeBuffer = 20;
-          cubieChargeTimer = 35; // Trigger energized sprite
+          cubieChargeTimer = 35;
           energy.x = canvas.width;
           energy.y = ENERGY_BAR_HEIGHT + Math.random() * verticalSpread;
         }
@@ -277,9 +314,7 @@
           energy.x = canvas.width;
           energy.y = ENERGY_BAR_HEIGHT + Math.random() * verticalSpread;
         }
-      }
-
-      if (gameState === "gameover") {
+      } else if (gameState === "gameover") {
         drawGameOver();
       }
 
@@ -287,7 +322,12 @@
     }
 
     canvas.addEventListener("click", () => {
-      if (gameState === "start" || gameState === "gameover") {
+      if (gameState === "start") {
+        initGame();
+      } else if (gameState === "controls") {
+        hasShownControls = true;
+        gameState = "playing";
+      } else if (gameState === "gameover") {
         initGame();
       }
     });
