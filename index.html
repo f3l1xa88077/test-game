@@ -72,12 +72,13 @@
     ];
 
     const ENERGY_BAR_HEIGHT = 40;
+
+    // Declare variables properly
     let gameState = "start";
-    let cubie, energy;
     let score = 0;
     let energyLevel = 110;
-    let speed = 4;
-    let drainRate = 0.03;
+    let speed = 200;
+    let drainRate = 3;
     let gameTimer = 0;
     let rechargeBuffer = 0;
     let cubieFrame = 0;
@@ -85,8 +86,10 @@
     let cubieChargeTimer = 0;
     let energyFrame = 0;
     let energyFrameCounter = 0;
-    let hasShownControls = false;
     let frozenFrame = null;
+    let hasShownControls = false;
+    let cubie;
+    let energy;
     let lastTime = performance.now();
 
     const keys = { ArrowUp: false, ArrowDown: false };
@@ -110,6 +113,19 @@
     function initGame() {
       cubie = { x: 20, y: ENERGY_BAR_HEIGHT + 100, w: 74, h: 50 };
       energy = { x: 400, y: ENERGY_BAR_HEIGHT + Math.random() * (300 - ENERGY_BAR_HEIGHT - 20), r: 15 };
+
+      // Reset gameplay variables on new game start:
+      score = 0;
+      energyLevel = 110;
+      speed = 200;
+      drainRate = 3;
+      gameTimer = 0;
+      rechargeBuffer = 0;
+      cubieFrame = 0;
+      cubieFrameCounter = 0;
+      cubieChargeTimer = 0;
+      energyFrame = 0;
+      energyFrameCounter = 0;
 
       if (!hasShownControls) {
         gameState = "controls";
@@ -177,7 +193,6 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      // Overlay with semi-transparent black
       ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -216,16 +231,16 @@
 
         cubie.y = Math.max(ENERGY_BAR_HEIGHT, Math.min(canvas.height - cubie.h, cubie.y));
 
-        cubieFrameCounter += deltaTime * 60;
-        if (cubieFrameCounter >= 20) {
+        cubieFrameCounter += deltaTime;
+        if (cubieFrameCounter >= 0.5) {
           cubieFrame = (cubieFrame + 1) % cubieSprites.length;
           cubieFrameCounter = 0;
         }
 
         if (cubieChargeTimer > 0) cubieChargeTimer--;
 
-        energyFrameCounter += deltaTime * 60;
-        if (energyFrameCounter >= 15) {
+        energyFrameCounter += deltaTime;
+        if (energyFrameCounter >= 1/3) {
           energyFrame = (energyFrame + 1) % energyImgs.length;
           energyFrameCounter = 0;
         }
@@ -235,20 +250,20 @@
         drawEnergyBar();
 
         gameTimer += deltaTime;
-        if (Math.floor(gameTimer * 60) % 300 === 0) {
-          speed += 0.25;
-          drainRate += 0.01;
+        if (Math.floor(gameTimer * 60) % 50 === 0) {
+          speed += 5;
+          drainRate += 0.08;
         }
 
         if (rechargeBuffer > 0) {
           rechargeBuffer--;
         } else {
-          energyLevel -= drainRate * deltaTime * 60;
+          energyLevel -= drainRate * deltaTime;
         }
 
         if (energyLevel <= 0) gameState = "gameover";
 
-        energy.x -= speed * deltaTime * 60;
+        energy.x -= speed * deltaTime;
 
         const secondsElapsed = gameTimer;
         const basePoints = 50;
